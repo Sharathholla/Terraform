@@ -1,0 +1,2 @@
+topic_name,delivery_policy_protocol,min_delay_target,max_delay_target,number_of_retry,max_delay_retries,no_delay_retries,min_delay_retries,back_off_function,disable_subscription_override,tags,
+sharath-sns-topic-1,http,20,20,3,0,0,0,0,linear,FALSE,Sharath
