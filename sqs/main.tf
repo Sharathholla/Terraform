@@ -1,0 +1,144 @@
+provider "aws" {
+  region = "${var.region}"
+  shared_credentials_file = "/home/ec2-user/.aws/credentials" 
+}
+
+terraform {
+  backend "s3" {
+    bucket="sharath-terraform-statefiles"
+    key = "SQS/SQS"
+    region="us-east-2"
+  }
+}
+locals {
+    sqs_queues = csvdecode(file("./variables-csv/sqs.csv"))
+    sqs_dlq_queues = csvdecode(file("./variables-csv/sqs-dlq.csv"))
+    sqs_queue_policies = csvdecode(file("./variables-csv/sqs-queue-policies.csv"))
+    queue_list = csvdecode(file("./variables-csv/queue-list.csv"))
+}
+
+module "sqs_queue_dlq"{
+    source = "./sqs"
+    for_each = { for queue in local.sqs_dlq_queues : queue.queue_name => queue }
+    name                      = each.value.queue_name
+    sqs_policy = data.aws_iam_policy_document.sqs_dlq_queue_policy[each.value.queue_name].json
+    content_based_deduplication = tobool(each.value.content_based_deduplication)
+    deduplication_scope   = each.value.deduplication_scope
+    delay             = tobool(each.value.content_based_deduplication) == false ? null : tonumber(each.value.delay)
+    fifo_queue                  = each.value.fifo_queue == "" ? false: true
+    throughput = each.value.throughput
+    max_message_size          = tobool(each.value.content_based_deduplication) == false ? null : tonumber(each.value.max_message_size)
+    message_retention = tonumber(each.value.message_retention)
+    visibility_timeout_seconds = tonumber(each.value.visibility_timeout_seconds)
+    receive_wait_time = tobool(each.value.content_based_deduplication) == false ? null : tonumber(each.value.receive_wait_time)
+    redrive_allow_policy = each.value.source_queue_name != "" ? jsonencode({
+        redrivePermission = "byQueue",
+        sourceQueueArns = [for i in split ("", each.value.source_queue_name) : "arn:aws:sqs:${i}"]
+    }) : ""
+    tags = each.value.tags
+}
+module "sqs_queue"{
+    depends_on = [module.sqs_queue_dlq]
+    source = "./sqs"
+    for_each = { for queue in local.sqs_queues : queue.queue_name => queue }
+    name                      = each.value.queue_name
+    sqs_policy = data.aws_iam_policy_document.sqs_queue_policy[each.value.queue_name].json
+    content_based_deduplication = tobool(each.value.content_based_deduplication)
+    deduplication_scope   = each.value.deduplication_scope
+    delay             = tobool(each.value.content_based_deduplication) == false ? null : tonumber(each.value.delay)
+    fifo_queue                  = each.value.fifo_queue == "" ? false: true
+    throughput = each.value.throughput
+    max_message_size          = tobool(each.value.content_based_deduplication) == false ? null : tonumber(each.value.max_message_size)
+    message_retention = tonumber(each.value.message_retention)
+    visibility_timeout_seconds = tonumber(each.value.visibility_timeout_seconds)
+    receive_wait_time = tobool(each.value.content_based_deduplication) == false ? null : tonumber(each.value.receive_wait_time)
+    redrive_policy = jsonencode({
+        deadLetterTargetArn = module.sqs_queue_dlq[each.value.dlq_name].sqs_dlq_queue_arn,
+        maxReceiveCount = tonumber(each.value.maxReceiveCount) 
+    })
+    tags =  each.value.tags
+}
+
+
+data "aws_iam_policy_document" "__owner_statement" {
+    for_each = { for queue in local.queue_list : queue.queue_name => queue }
+    dynamic "statement" {
+        for_each = { for sid in local.sqs_queue_policies : sid.sid => sid if sid.queue_name == each.value.queue_name && sid.sid == "__owner_statement" }
+    
+        content {
+            sid = lookup(statement.value, "sid")
+            effect = "Allow"
+            actions = ["sqs:*"]
+            # principals {
+            #    identifiers = ["arn:aws:iam::root"]
+            #    type = "AWS"
+            # }
+            resources = [
+                "arn:aws:sqs:::${lookup(each.value, "queue_name")}"
+            ]
+        }
+    }
+}
+
+data "aws_iam_policy_document" "__sender_statement" {
+    for_each = { for queue in local.queue_list : queue.queue_name => queue }
+    dynamic "statement" {
+        for_each = { for sid in local.sqs_queue_policies : sid.sid => sid if sid.queue_name == each.value.queue_name && sid.sid == "__sender_statement" }
+    
+        content {
+            sid = lookup(statement.value, "sid")
+            effect = "Allow"
+            actions = ["sqs:*"]
+            # principals {
+            #    identifiers = ["arn:aws:iam::root"]
+            #    type = "AWS"
+            # }
+            condition {
+                test = "stringEquals"
+                values = [for i in split(" ", lookup(statement.value, "roles_to_allow")) : "arn:aws:iam:::role/${i}"]
+                variable ="aws:PrincipalArn"
+            }
+            resources = [
+                "arn:aws:sqs:::${lookup(each.value, "queue_name")}"
+            ]
+        }
+    }
+}
+
+data "aws_iam_policy_document" "Allows3Access" {
+    for_each = { for queue in local.queue_list : queue.queue_name => queue }
+    dynamic "statement" {
+        for_each = { for sid in local.sqs_queue_policies : sid.sid => sid if sid.queue_name == each.value.queue_name && sid.sid == "Allows3Access" }
+        
+        content {
+            sid = lookup(statement.value, "sid")
+            effect = "Allow"
+            actions = ["sqs:*"]
+             principals {
+                identifiers = [for i in split(" ", lookup(statement.value, "roles_to_allow")) : i]
+                type = "Services"
+             }
+            resources = [
+                "arn:aws:sqs:::${lookup(each.value, "queue_name")}"
+            ]
+        }
+    }
+}
+
+data "aws_iam_policy_document" "sqs_dlq_queue_policy" {
+    for_each = { for queue in local.sqs_dlq_queues : queue.queue_name => queue } 
+    source_policy_documents = [for k, v in [
+        data.aws_iam_policy_document.__owner_statement[each.value.queue_name].json,
+        data.aws_iam_policy_document.__sender_statement[each.value.queue_name].json,
+        data.aws_iam_policy_document.Allows3Access[each.value.queue_name].json
+    ] : v if v != null]
+}
+
+data "aws_iam_policy_document" "sqs_queue_policy" {
+    for_each = { for queue in local.sqs_queues : queue.queue_name => queue } 
+    source_policy_documents = [for k, v in [
+        data.aws_iam_policy_document.__owner_statement[each.value.queue_name].json,
+        data.aws_iam_policy_document.__sender_statement[each.value.queue_name].json,
+        data.aws_iam_policy_document.Allows3Access[each.value.queue_name].json
+    ] : v if v != null]
+}

@@ -1,0 +1,2 @@
+queue_name,source_queue_name,fifo_queue,content_based_deduplication,deduplication_scope,delay,throughput,max_message_size,message_retention,visibility_timeout_seconds,receive_wait_time,maxReceiveCount,tags
+sqs-checking-dlq.fifo,sqs-checking.fifo,no,false,queue,,perQueue,256,864000,30,10,,Sharath Holla

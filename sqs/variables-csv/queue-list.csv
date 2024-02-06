@@ -1,0 +1,3 @@
+queue_name,description
+sqs-checking-dlq,DeadLetterFIFOQueue
+sqs-checking,NormalFIFOQueue
