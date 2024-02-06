@@ -30,18 +30,34 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
-      - name: Terraform Init
-        id: init
-        run: |
-          terraform fmt
-          terraform validate
-          terraform init ${{ github.event.inputs.working-dir }}
+        with:
+          terraform_version: 0.14.4
 
-      - name: Terraform plan
-        id: plan
-        run: |
-          echo ${{ github.event.inputs.working-dir }}
-          terraform plan ${{ github.event.inputs.working-dir }}
+      - name: Terraform Fmt
+        id: fmt
+        run: terraform fmt -check
+        continue-on-error: true
+        working-directory: ${{ github.event.inputs.working-dir }}
+      
+      - name: Terraform init
+        id: init
+        run: terraform init
+        working-directory: ${{ github.event.inputs.working-dir }}
+
+
+      
+      # - name: Terraform Init
+      #   id: init
+      #   run: |
+      #     terraform fmt
+      #     terraform validate
+      #     terraform init ${{ github.event.inputs.working-dir }}
+
+      # - name: Terraform plan
+      #   id: plan
+      #   run: |
+      #     echo ${{ github.event.inputs.working-dir }}
+      #     terraform plan ${{ github.event.inputs.working-dir }}
 
       # - name: Terraform Apply
       #   run: terraform apply -auto-approve
