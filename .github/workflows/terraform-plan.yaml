@@ -40,6 +40,7 @@ jobs:
       - name: Terraform plan
         id: plan
         run: |
+          echo ${{ github.event.inputs.working-dir }}
           terraform plan ${{ github.event.inputs.working-dir }}
 
       # - name: Terraform Apply
