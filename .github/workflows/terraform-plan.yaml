@@ -1,0 +1,50 @@
+name: "terraform-plan"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      working-dir:
+        type: multi-choice
+        description: select the working directory
+        options: 
+        - sns
+        - sqs
+  
+
+jobs:
+  PushToAWS:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+
+    steps:
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform fmt
+          terraform validate
+          terraform init ${{ github.event.inputs.working-dir }}
+
+      - name: Terraform plan
+        id: init
+        run: |
+          terraform plan ${{ github.event.inputs.working-dir }}
+
+      # - name: Terraform Apply
+      #   run: terraform apply -auto-approve
+      #   env:
+      #     TF_VAR_aws_s3_bucket: ${{ secrets.AWS_S3_BUCKET }}
+      #     TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+      #     TF_VAR_jwtSecret: ${{ secrets.JWT_SECRET }}
