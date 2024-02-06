@@ -38,7 +38,7 @@ jobs:
           terraform init ${{ github.event.inputs.working-dir }}
 
       - name: Terraform plan
-        id: init
+        id: plan
         run: |
           terraform plan ${{ github.event.inputs.working-dir }}
 
