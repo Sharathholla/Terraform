@@ -1,48 +1,75 @@
-name: "terraform-plan"
+name: Terraform
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
-    inputs:
-      working-dir:
-        type: multi-choice
-        description: select the working directory
-        options: 
-        - sns
-        - sqs
-  
+    paths:
+      - '*'
 
 jobs:
-  PushToAWS:
+  terraform:
     runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-
 
     steps:
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-        with:
-          terraform_version: 0.14.4
+      - name: Initialize Terraform
+        run: terraform init ./Terraform
 
-      - name: Terraform Fmt
-        id: fmt
-        run: terraform fmt -check
-        continue-on-error: true
-        working-directory: ${{ github.event.inputs.working-dir }}
+      - name: Terraform Plan
+        run: terraform plan ./Terraform/sns
+
+      # - name: Terraform Apply
+      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      #   run: terraform apply -auto-approve -var-file=./terraform/terraform.tfvars ./terraform
+
+
+
+# name: "terraform-plan"
+
+# on:
+#   push:
+#     branches:
+#       - main
+#   pull_request:
+#     branches:
+#       - main
+#   workflow_dispatch:
+#     inputs:
+#       working-dir:
+#         type: multi-choice
+#         description: select the working directory
+#         options: 
+#         - sns
+#         - sqs
+  
+
+# jobs:
+#   PushToAWS:
+#     runs-on: ubuntu-latest
+#     env:
+#       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#       AWS_REGION: ${{ secrets.AWS_REGION }}
+
+
+#     steps:
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v2
+
+#         with:
+#           terraform_version: 0.14.4
+
+#       - name: Terraform Fmt
+#         id: fmt
+#         run: terraform fmt -check
+#         continue-on-error: true
+#         working-directory: ${{ github.event.inputs.working-dir }}
       
-      - name: Terraform init
-        id: init
-        run: terraform init
-        working-directory: ${{ github.event.inputs.working-dir }}
+#       - name: Terraform init
+#         id: init
+#         run: terraform init
+#         working-directory: ${{ github.event.inputs.working-dir }}
 
 
       
